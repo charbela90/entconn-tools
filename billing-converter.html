@@ -1,0 +1,1390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Telstra Billing Report Converter</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;800&display=swap');
+:root {
+  --blue:#2563EB; --orange:#F59E0B; --dark:#1e293b; --mid:#475569;
+  --light:#94a3b8; --bg:#f8fafc; --white:#ffffff; --border:#e2e8f0;
+  --success:#10b981; --danger:#ef4444;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--dark);min-height:100vh;}
+.app-header{background:var(--white);border-bottom:3px solid var(--blue);padding:20px 40px;display:flex;align-items:center;gap:20px;box-shadow:0 2px 8px rgba(0,0,0,.06);}
+.header-icon{width:48px;height:48px;background:linear-gradient(135deg,#1e3a5f,#2563EB);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.app-header-text h1{font-size:20px;font-weight:800;color:var(--dark);}
+.app-header-text p{font-size:13px;color:var(--mid);}
+.container{max-width:960px;margin:0 auto;padding:40px 24px 80px;}
+.upload-card{background:var(--white);border:2px dashed var(--border);border-radius:16px;padding:60px 40px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.upload-card:hover,.upload-card.drag{border-color:var(--blue);background:#eff6ff;}
+.upload-card input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.upload-icon{font-size:52px;margin-bottom:16px;}
+.upload-card h2{font-size:22px;font-weight:800;margin-bottom:8px;}
+.upload-card p{color:var(--mid);font-size:14px;margin-bottom:24px;}
+.btn-primary{display:inline-flex;align-items:center;gap:8px;padding:12px 32px;background:var(--blue);color:#fff;border-radius:8px;font-weight:700;font-size:15px;border:none;cursor:pointer;font-family:inherit;transition:all .2s;}
+.btn-primary:hover:not(:disabled){background:#1d4ed8;transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.3);}
+.btn-generate{display:inline-flex;align-items:center;gap:8px;padding:14px 40px;background:var(--blue);color:#fff;border-radius:10px;font-weight:800;font-size:16px;border:none;cursor:pointer;font-family:inherit;transition:all .2s;}
+.btn-generate:hover:not(:disabled){background:#1d4ed8;transform:translateY(-1px);box-shadow:0 6px 20px rgba(37,99,235,.35);}
+.btn-generate:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none;}
+.btn-reset{background:none;border:1px solid var(--border);color:var(--mid);padding:8px 16px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;transition:all .2s;}
+.btn-reset:hover{border-color:var(--danger);color:var(--danger);}
+.file-pill{display:inline-flex;align-items:center;gap:10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 16px;margin-top:20px;}
+.file-pill .filename{font-weight:700;font-size:14px;color:var(--blue);}
+.file-pill .remove-btn{background:none;border:none;cursor:pointer;color:var(--light);font-size:20px;line-height:1;padding:0 2px;transition:color .15s;}
+.file-pill .remove-btn:hover{color:var(--danger);}
+.section-gap{height:28px;}
+.panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.panel-header h2{font-size:22px;font-weight:800;}
+.config-section{background:var(--white);border-radius:16px;border:1px solid var(--border);margin-bottom:20px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.config-section-header{padding:16px 20px;background:#f8fafc;border-bottom:1px solid var(--border);font-weight:700;font-size:15px;display:flex;align-items:center;gap:10px;}
+.dot{width:8px;height:8px;border-radius:50%;}
+.dot-blue{background:var(--blue);box-shadow:0 0 0 3px #bfdbfe;}
+.dot-green{background:var(--success);box-shadow:0 0 0 3px #a7f3d0;}
+.dot-orange{background:var(--orange);box-shadow:0 0 0 3px #fde68a;}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);}
+.stat-cell{padding:22px 24px;border-right:1px solid var(--border);display:flex;flex-direction:column;gap:5px;}
+.stat-cell:last-child{border-right:none;}
+.stat-label{font-size:11px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.6px;}
+.stat-value{font-size:24px;font-weight:800;color:var(--dark);letter-spacing:-.5px;}
+.actions-bar{display:flex;gap:14px;align-items:center;padding:20px;border-top:1px solid var(--border);}
+.log-body{padding:16px 20px;font-family:'Courier New',monospace;font-size:12.5px;line-height:1.85;min-height:72px;max-height:220px;overflow-y:auto;background:#f8fafc;}
+.log-line{display:flex;gap:14px;}
+.log-line .ts{color:var(--light);flex-shrink:0;user-select:none;}
+.log-line .msg{color:var(--dark);}
+.log-line.ok .msg{color:var(--success);font-weight:700;}
+.log-line.err .msg{color:var(--danger);font-weight:700;}
+.log-line.info .msg{color:var(--blue);}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div class="header-icon">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+    </svg>
+  </div>
+  <div class="app-header-text">
+    <h1>Telstra Billing Report Converter</h1>
+    <p>Upload any ION Billing Report</p>
+  </div>
+</header>
+<div class="container">
+  <div id="upload-section">
+    <div class="upload-card" id="drop-zone">
+      <input type="file" id="file-input" accept=".xlsm,.xlsx,.xls"/>
+      <div class="upload-icon">📂</div>
+      <h2>Drop your ION report here</h2>
+      <p>Supports .xlsm, .xlsx, and .xls — drag & drop or click to browse</p>
+      <button class="btn-primary" type="button" onclick="document.getElementById('file-input').click();event.stopPropagation();">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Browse File
+      </button>
+      <div id="file-pill-wrap" style="display:none">
+        <div class="file-pill">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="filename" id="file-name-label">—</span>
+          <button class="remove-btn" id="remove-file-btn">×</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="config-panel" style="display:none">
+    <div class="section-gap"></div>
+    <div class="panel-header">
+      <h2>File Summary</h2>
+      <button class="btn-reset" id="reset-btn">↩ Load different file</button>
+    </div>
+    <div class="config-section">
+      <div class="config-section-header"><span class="dot dot-green"></span>File loaded successfully</div>
+      <div class="stats-grid">
+        <div class="stat-cell"><div class="stat-label">Account</div><div class="stat-value" id="stat-account">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Bill Rows</div><div class="stat-value" id="stat-rows">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Service Numbers</div><div class="stat-value" id="stat-fnns">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Billing Periods</div><div class="stat-value" id="stat-periods">—</div></div>
+      </div>
+      <div class="actions-bar">
+        <button class="btn-generate" id="generate-btn" disabled>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Generate Summary Report
+        </button>
+      </div>
+    </div>
+
+    <div class="config-section" id="fund-preview" style="display:none">
+      <div class="config-section-header"><span class="dot dot-blue"></span>Enterprise Fund Calculator — auto-filled values</div>
+      <div style="padding:16px 20px">
+        <p style="font-size:13px;color:var(--mid);margin-bottom:16px">The following monthly spend amounts will be entered into the yellow cells in the <strong>Enterprise Fund Calculator</strong> sheet. The fund value (10% or 5%) is then calculated from these figures.</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px">
+          <div style="padding:14px 16px;border-right:1px solid var(--border)">
+            <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Data &amp; IP (G12) · 10%</div>
+            <div style="font-size:20px;font-weight:800;color:var(--dark)" id="fund-g12">$—</div>
+            <div style="font-size:10px;color:var(--light);margin-top:2px">Internet &amp; Connectivity</div>
+          </div>
+          <div style="padding:14px 16px;border-right:1px solid var(--border)">
+            <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">UC (G25) · 5%</div>
+            <div style="font-size:20px;font-weight:800;color:var(--dark)" id="fund-g25">$—</div>
+            <div style="font-size:10px;color:var(--light);margin-top:2px">SIP/VoIP + TCO365 calling</div>
+          </div>
+          <div style="padding:14px 16px;border-right:1px solid var(--border)">
+            <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Cloud w/o PS (G22) · 5% ⚠</div>
+            <div style="font-size:20px;font-weight:800;color:#b45309" id="fund-g22">$—</div>
+            <div style="font-size:10px;color:var(--light);margin-top:2px">M365 licences — needs approval</div>
+          </div>
+          <div style="padding:14px 16px">
+            <div style="font-size:10px;font-weight:700;color:var(--light);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Security (G28) · 5%</div>
+            <div style="font-size:20px;font-weight:800;color:var(--dark)" id="fund-g28">$—</div>
+            <div style="font-size:10px;color:var(--light);margin-top:2px">Managed Network Services</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:#b45309;padding:8px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">
+          ⚠ <strong>Cloud / M365 contributions require Telstra Funds Helpdesk approval</strong> before they can be included. Cloud+PS (G16) cannot be determined from billing data — enter manually. Always verify MMC is between $1,000 and $250,000/month.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════════
+// NORMALISE — handles column name differences across report variants
+// Standard ION: ACCOUNT #, BILL #, BILL DATE, FNN, TYPE, DESCRIPTION, AMOUNT $
+// RENTOKIL/POBS: ACCT, BILL DATE, MOBILE, TYPE, DESCRIPTION, AMOUNT  (no BILL #, no FNN)
+// ═══════════════════════════════════════════════════════════════════════════════
+function normaliseRow(row) {
+  return {
+    'ACCOUNT #':   String(row['ACCOUNT #'] || row['ACCT']    || row['ACCOUNT'] || '').trim(),
+    'BILL #':      String(row['BILL #']    || row['BILL_#']  || '').trim(),
+    'BILL DATE':   row['BILL DATE'] || row['BILLDATE'] || '',
+    'FNN':         String(row['FNN']       || row['MOBILE']  || row['SERVICE'] || '').trim(),
+    'TYPE':        String(row['TYPE']      || '').trim(),
+    'DESCRIPTION': String(row['DESCRIPTION'] || '').trim(),
+    'QTY':         row['QTY'] || 1,
+    // RENTOKIL uses 'AMOUNT' (no $), standard uses 'AMOUNT $'
+    'AMOUNT $':    parseFloat(row['AMOUNT $'] != null ? row['AMOUNT $'] : (row['AMOUNT'] != null ? row['AMOUNT'] : 0)) || 0,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHEET DETECTION — find the best data sheet across all ION report variants
+// ═══════════════════════════════════════════════════════════════════════════════
+function findDataSheet(wb) {
+  const names = wb.SheetNames;
+
+  // Priority 1: TABLE sheet (standard format)
+  const tableSheet = names.find(n => n.trim().toUpperCase() === 'TABLE');
+  if (tableSheet) return tableSheet;
+
+  // Priority 2: Sheet with DESCRIPTION column and most rows
+  let best = null, bestRows = 0;
+  for (const name of names) {
+    try {
+      const ws = wb.Sheets[name];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: null, header: 1 });
+      if (!rows.length) continue;
+      const header = (rows[0] || []).map(c => String(c || '').trim().toUpperCase());
+      const hasDesc = header.some(h => h.includes('DESCRIPTION'));
+      const hasAmt  = header.some(h => h.includes('AMOUNT'));
+      if (hasDesc && hasAmt && rows.length > bestRows) {
+        best = name; bestRows = rows.length;
+      }
+    } catch(e) { /* skip */ }
+  }
+  return best || names[0];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CATEGORISATION v3 — verified against all 10 uploaded ION report files.
+// Key fixes vs v2:
+//   • 'STD' standalone (trunk calls) was falling through — now explicit match
+//   • 'Standard Calling TCO365' is M365 (Teams calling), not call charges
+//   • 'Miscellaneous Products Adjustment' now caught as Fees & Adjustments
+//   • RENTOKIL "N Adaptive Mobile Repayment / Ref: ..." regex match added
+//   • M365 Bundle Discount is a licence line, not a generic discount
+//   • Satellite checked before Mobile so "Mobile Satellite Essential" routes correctly
+//   • Rule ordering tightened: most-specific → broadest
+// Returns [category, subCategory].
+// ═══════════════════════════════════════════════════════════════════════════════
+function categorize(desc) {
+  const raw = String(desc || '').trim();
+  const d   = raw.toLowerCase();
+  if (!d) return ['Other Services', 'Uncategorised'];
+
+  // ── Discounts & Credits ──────────────────────────────────────────────────────
+  // Regex: catches "17% Discount", "100% DISCOUNT", "51% discount off" etc.
+  if (/\d[\d.,]*\s*%\s*(discount|off)/i.test(raw)) return ['Discounts & Credits', 'Contract Discounts'];
+  // M365 Bundle Discount is a licence adjustment — must precede generic discount block
+  if (d.startsWith('m365 bundle discount')) return ['Microsoft 365 Licences', 'M365'];
+  if (['bill rounding','redemption credits','atm discount','a4b credit adjustment',
+       'multiple product 100% discount','speed level bonus miscellaneous',
+       'site to site calling discount','ip man wan interconnect discount',
+       'ip telephony local, std and mobile calls discount',
+       'local call itemisation discount','business ip rental discount',
+       'telstra calling 0365 premium d','calls to 13 numbers - discount',
+       'mobile bonus',
+      ].some(x => d.includes(x))) return ['Discounts & Credits', 'Contract Discounts'];
+
+  // ── Microsoft 365 — Teams & Add-ons ─────────────────────────────────────────
+  // Must precede generic M365 block — "MS Teams Phone" contains "teams phone"
+  if (['ms teams','teams phone std','teams phone prem','teams prem ',
+       'teams rmpr','ms entra','msft defender','power autmate','power automate',
+      ].some(x => d.includes(x))) return ['Microsoft 365 Licences', 'Teams & Add-ons'];
+
+  // ── Microsoft 365 — Power BI ─────────────────────────────────────────────────
+  if (d.includes('power bi') || d.includes('pwr bi')) return ['Microsoft 365 Licences', 'Power BI'];
+
+  // ── Microsoft 365 — Project ──────────────────────────────────────────────────
+  if (d.includes('project plan')) return ['Microsoft 365 Licences', 'Project'];
+
+  // ── Microsoft 365 — Visio ────────────────────────────────────────────────────
+  if (d.includes('visio plan') || (d.includes('visio') && / nc /.test(d))) return ['Microsoft 365 Licences', 'Visio'];
+
+  // ── Microsoft 365 — M365 / O365 core (incl. Standard/Premium Calling TCO365) ─
+  if (['o365 enterprise','office 365 e5','office 365 ex',
+       'exchg online','exchange online','sharept online','sharepoint online',
+       'ms365','mdm software','sendum service',
+       'standard calling tco365','premium calling tco365',
+      ].some(x => d.includes(x))) return ['Microsoft 365 Licences', 'M365'];
+  // m365 prefix — must exclude M2M/wireless data refs
+  if (d.startsWith('m365') && !d.includes('m2m') && !d.includes('wireless')) return ['Microsoft 365 Licences', 'M365'];
+
+  // ── Satellite ────────────────────────────────────────────────────────────────
+  // Before Mobile so "Mobile Satellite Essential" hits Satellite, not Mobile
+  if (['tms45','tms75','tm satellite','flexi plan call allowance'].some(x => d.includes(x)) ||
+      (d.includes('satellite') && !d.includes('data'))) return ['Satellite Services', 'Satellite Plans'];
+
+  // ── Mobile Plans — Adaptive / New (post-2022 Telstra product names) ──────────
+  if (['adaptive mobile essential','adaptive mobile enhanced','adaptive mobile epic',
+       'adaptive mobile mbb','adaptive mobile idd','adaptive mobile ew',
+       'adaptive mobility accelerator','adaptive mob ir',
+       'liberate mobile service pack','stayconnected advanced',
+       'all-4-biz mobile usage sharing','all-4-biz free on account calls',
+       'a4b one day plan','business bundle data plan',
+       'business data plan l','business data plan s',
+       'business mobile plan - xl','business mobile plan basic',
+       'business mobile plan essential','business mobile plan premium',
+       '$0 data flexiplan','top up 50gb share','cmp acct data commitment',
+      ].some(x => d.includes(x))) return ['Mobile Plans & Data', 'Adaptive / New Plans'];
+  if (d.includes('all-4-biz') && (d.includes('plan fee') || d.includes('recon plan'))) return ['Mobile Plans & Data', 'Adaptive / New Plans'];
+
+  // ── Mobile Plans — Legacy ────────────────────────────────────────────────────
+  if (['fleet plus data share','my business data share sim',
+       'business data plan xs','mobile service pack',
+      ].some(x => d.includes(x))) return ['Mobile Plans & Data', 'Legacy Plans'];
+  // "Business Mobile Plan S/M/L/XL" legacy naming pattern
+  if (/business mobile plan\s*([-–]?\s*)(s|m|l|xl|small|medium|large)\b/.test(d)) return ['Mobile Plans & Data', 'Legacy Plans'];
+
+  // ── Mobile — Handsets & Repayments ──────────────────────────────────────────
+  if (['adaptive mobile repayment','adaptive mobile repymt','adaptive mobile amr hardware',
+       '24mth mobile repayment','mobile handset','mobile hardware adjustment',
+       'equipment billing account','activation fee miscellaneous',
+       'reconnection fee','transfer service fee','new service connect fee',
+       'tbs repayment','mobile voice adjustment',
+      ].some(x => d.includes(x))) return ['Mobile Plans & Data', 'Handsets & Repayments'];
+  // RENTOKIL: "4 Adaptive Mobile Repayment / Ref: TBAPO..."
+  if (/^\d+\s+adaptive mobile repayment/.test(d)) return ['Mobile Plans & Data', 'Handsets & Repayments'];
+
+  // ── Mobile — Features & Add-ons ─────────────────────────────────────────────
+  if (['adaptive mobility care service','adaptive mob care discount',
+       'mobile enhanced sms','mobile originated sms','no mo sms',
+       'gprs mms access bar','messagebank','network features',
+       'calling number display','hunt group','line hunt',
+       'one number subscription','additional voice line','number held for call diversion',
+      ].some(x => d.includes(x))) return ['Mobile Plans & Data', 'Mobile Features & Add-ons'];
+
+  // ── International & Roaming ──────────────────────────────────────────────────
+  if (['international direct','international roaming','intl day pass',
+       'calls made overseas','calls received overseas','data usage overseas',
+       'calls made overseas/sms','access to use mobile overseas',
+       'adaptive mob ir month','telstra wireless m2m - data roaming',
+      ].some(x => d.includes(x))) return ['International & Roaming', 'International'];
+
+  // ── Internet & Connectivity — Data & Wireless ────────────────────────────────
+  if (['telstra wireless m2m','telstra iot data','packet data sessions',
+       'internet and data usage','internet direct usage',
+       'fixed wireless plus speed boost','ipwan wireless ip','ip solutions wireless ip',
+       'speed optimiser','superfast speed','premium speed',
+       'standard pro speed','standard plus speed','standard speed',
+       'unlimited internet','unlimited business internet',
+      ].some(x => d.includes(x))) return ['Internet & Connectivity', 'Data & Wireless'];
+  if (d.includes('m2m') && !d.includes('roaming')) return ['Internet & Connectivity', 'Data & Wireless'];
+  if (d.startsWith('gprs') && !d.includes('mms')) return ['Internet & Connectivity', 'Data & Wireless'];
+
+  // ── Internet & Connectivity — NBN ────────────────────────────────────────────
+  if (['nbn enterprise ethernet','nbn ee access','nbn mtm','nbn tc2','nbn tc4',
+       'nbn speed level','t-biz broadband',
+       'tbb large','tbb medium','tbb small','tbb unlimited','tbb x-small','tbb on nbn',
+      ].some(x => d.includes(x))) return ['Internet & Connectivity', 'NBN'];
+
+  // ── Internet & Connectivity — Fibre & Ethernet ───────────────────────────────
+  if (['telstra fibre','business ip adapt','bip adapt','tid lite adapt','tid adapt',
+       'bip broadband','bip ethernet','cip broadband','cip ethernet',
+       'connect ip bdsl','connect ip network','connect ip installation',
+       'ip man single uplink','ip solutions managed radius',
+       'corporate connect 2','frame relay simplified','business ip ethernet single uplink',
+      ].some(x => d.includes(x))) return ['Internet & Connectivity', 'Fibre & Ethernet'];
+
+  // ── Internet & Connectivity — Broadband ──────────────────────────────────────
+  if (['business broadband standard','business broadband ultimate',
+       'telstra business broadband','telstra business smart modem',
+       'dot voice and broadband','dot eftpos & fax','internet direct',
+      ].some(x => d.includes(x))) return ['Internet & Connectivity', 'Broadband'];
+
+  // ── Voice & Fixed Line — SIP / VoIP ─────────────────────────────────────────
+  // Includes TBIZ products (BusinessLine, T-Biz Voice), SIP, TIPT, 1300 TBIZ number services
+  if (['tipt','sip complete','sip connect','business sip',
+       'businessline','t-biz voice',
+       '1300 phoneword',
+      ].some(x => d.includes(x))) return ['Voice & Fixed Line', 'SIP & VoIP'];
+
+  // ── Voice & Fixed Line — Voice Plans ────────────────────────────────────────
+  if (['business voice','ultimate business voice','main business number',
+       'telephone handset rental','disability phone','disability telephone',
+       'telstra home messages',
+      ].some(x => d.includes(x))) return ['Voice & Fixed Line', 'Voice Plans'];
+
+  // ── Voice & Fixed Line — ISDN ────────────────────────────────────────────────
+  if (d.includes('isdn')) return ['Voice & Fixed Line', 'ISDN'];
+
+  // ── Call Charges ─────────────────────────────────────────────────────────────
+  // Exact 'STD' = standard trunk calls billed as Usage type
+  if (d === 'std') return ['Call Charges', 'Call Usage'];
+  if (['calls direct to mobile','calls forwarded','calls from mobile',
+       'calls to 13','calls made overseas/sms',
+       'local fwd','local (charged)','local (free)',
+       'non-local','national direct dialled','national direct',
+       'std forwarded','freecall 1800','audio conferencing',
+      ].some(x => d.includes(x))) return ['Call Charges', 'Call Usage'];
+  // 'Local ...' standalone usage lines — but not discount lines
+  if (d.startsWith('local') && !d.includes('discount') && !d.includes('fwd')) return ['Call Charges', 'Call Usage'];
+
+  // ── Number & Directory Services ──────────────────────────────────────────────
+  if (['number redirection','number reservation',
+       'directory charges','directory assistance',
+      ].some(x => d.includes(x))) return ['Number Services', 'Numbers & Directory'];
+
+  // ── Managed / Network Services ───────────────────────────────────────────────
+  if (['managed radius','customnet','telstra analyser','bpn bundle',
+       'telstra enterprise fund','telstra business tech',
+      ].some(x => d.includes(x))) return ['Managed Network Services', 'Managed Services'];
+
+  // ── Hardware / TBS Equipment ─────────────────────────────────────────────────
+  if (['tbs maintenance','iphone','smart modem','polycom','telephone handset',
+      ].some(x => d.includes(x))) return ['Hardware & Equipment', 'Hardware'];
+  if (d.includes('handset') && !d.includes('repayment')) return ['Hardware & Equipment', 'Hardware'];
+
+  // ── Messaging ────────────────────────────────────────────────────────────────
+  if (d.includes('sms') && !d.includes('messagebank')) return ['Messaging Services', 'Messaging'];
+
+  // ── Fees, Adjustments & Miscellaneous ────────────────────────────────────────
+  // 'Miscellaneous Products Adjustment Miscellaneous' and similar
+  if (['miscellaneous products adjustment','miscellaneous',
+       'mobile voice adjustment','reconnection fee','transfer service fee','epvas',
+      ].some(x => d.includes(x))) return ['Other Services', 'Fees & Adjustments'];
+
+  return ['Other Services', 'Other'];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CUSTOM XLSX BUILDER — raw XML + JSZip (full styling support, no paid libs)
+// ═══════════════════════════════════════════════════════════════════════════════
+const XB = (() => {
+  let fonts=[], fills=[], borders=[], numFmts=[], cellXfs=[];
+  let fontIdx={}, fillIdx={}, borderIdx={}, numFmtIdx={}, xfIdx={};
+  let numFmtId=164;
+  let sharedStrings=[], ssIdx={};
+
+  function reset(){
+    fonts=[]; fills=[]; borders=[]; numFmts=[]; cellXfs=[];
+    fontIdx={}; fillIdx={}; borderIdx={}; numFmtIdx={}; xfIdx={};
+    numFmtId=164; sharedStrings=[]; ssIdx={};
+    addFill('none',''); addFill('gray125',''); // required by OOXML spec
+  }
+
+  function addFont(name,sz,bold,italic,color){
+    const k=`${name}|${sz}|${bold?1:0}|${italic?1:0}|${color}`;
+    if(fontIdx[k]!==undefined) return fontIdx[k];
+    fontIdx[k]=fonts.length; fonts.push({name,sz,bold,italic,color}); return fontIdx[k];
+  }
+  function addFill(pattern,fg){
+    const k=`${pattern}|${fg}`;
+    if(fillIdx[k]!==undefined) return fillIdx[k];
+    fillIdx[k]=fills.length; fills.push({pattern,fg}); return fillIdx[k];
+  }
+  function addBorder(has,color){
+    const k=`${has?1:0}|${color}`;
+    if(borderIdx[k]!==undefined) return borderIdx[k];
+    borderIdx[k]=borders.length; borders.push({has,color}); return borderIdx[k];
+  }
+  function addNumFmt(code){
+    if(!code) return 0;
+    if(numFmtIdx[code]!==undefined) return numFmtIdx[code];
+    const id=numFmtId++; numFmts.push({id,code}); numFmtIdx[code]=id; return id;
+  }
+  function addXf(fontId,fillId,borderId,nfId,halign,valign){
+    const k=`${fontId}|${fillId}|${borderId}|${nfId}|${halign}|${valign}`;
+    if(xfIdx[k]!==undefined) return xfIdx[k];
+    xfIdx[k]=cellXfs.length; cellXfs.push({fontId,fillId,borderId,nfId,halign,valign}); return xfIdx[k];
+  }
+
+  function sid(spec){
+    const fontId=addFont(spec.fontName||'Arial',spec.fontSize||10,spec.bold||false,spec.italic||false,spec.color||'FF000000');
+    const fillId=spec.bgColor?addFill('solid',spec.bgColor):addFill('none','');
+    const borderId=spec.border?addBorder(true,'FFBFBFBF'):addBorder(false,'');
+    const nfId=addNumFmt(spec.numFmt||'');
+    return addXf(fontId,fillId,borderId,nfId,spec.halign||'left',spec.valign||'center');
+  }
+
+  let S={};
+  function initStyles(){
+    reset();
+    sid({}); // index 0 = plain default
+    S.banner   = sid({bold:true, fontSize:14, color:'FFFFFFFF', bgColor:'FF003F87', halign:'center', border:true});
+    S.subBan   = sid({bold:false,fontSize:10, color:'FFFFFFFF', bgColor:'FF001A50', halign:'center'});
+    S.secHdr   = sid({bold:true, fontSize:11, color:'FFFFFFFF', bgColor:'FF001A50', halign:'left',   border:true});
+    S.colHdrL  = sid({bold:true, fontSize:9,  color:'FFFFFFFF', bgColor:'FF0066CC', halign:'left',   border:true});
+    S.colHdrC  = sid({bold:true, fontSize:9,  color:'FFFFFFFF', bgColor:'FF0066CC', halign:'center', border:true});
+    S.colHdrR  = sid({bold:true, fontSize:9,  color:'FFFFFFFF', bgColor:'FF0066CC', halign:'right',  border:true});
+    S.totalL   = sid({bold:true, fontSize:10, color:'FF000000', bgColor:'FFDCE6F1', halign:'left',   border:true});
+    S.totalR   = sid({bold:true, fontSize:10, color:'FF000000', bgColor:'FFDCE6F1', halign:'right',  border:true, numFmt:'$#,##0.00'});
+    S.totalP   = sid({bold:true, fontSize:10, color:'FF000000', bgColor:'FFDCE6F1', halign:'right',  border:true, numFmt:'0.0%'});
+    S.kpiVal   = sid({bold:true, fontSize:20, color:'FFFFFFFF', bgColor:'FF001A50', halign:'center'});
+    S.kpiLbl   = sid({bold:false,fontSize:9,  color:'FFAAAAAA', bgColor:'FF001A50', halign:'center'});
+    S.kpiSub   = sid({bold:false,fontSize:9,  color:'FFBBBBBB', bgColor:'FF001A50', halign:'center'});
+    S.d0L  = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'left'});
+    S.d0R  = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'right'});
+    S.d0C  = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'center'});
+    S.d0RC = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'right', numFmt:'$#,##0.00'});
+    S.d0RP = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'right', numFmt:'0.0%'});
+    S.d0LI = sid({fontSize:9, border:true, bgColor:'FFF5F5F5', halign:'left',  italic:true});
+    S.d1L  = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'left'});
+    S.d1R  = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'right'});
+    S.d1C  = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'center'});
+    S.d1RC = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'right', numFmt:'$#,##0.00'});
+    S.d1RP = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'right', numFmt:'0.0%'});
+    S.d1LI = sid({fontSize:9, border:true, bgColor:'FFFFFFFF', halign:'left',  italic:true});
+    S.tHdr = sid({bold:true, fontSize:10, color:'FF000000', bgColor:'FFF5F5F5', halign:'left', border:true});
+  }
+
+  function ds(i){ return i%2===0 ? {L:S.d0L,R:S.d0R,C:S.d0C,RC:S.d0RC,RP:S.d0RP,LI:S.d0LI} : {L:S.d1L,R:S.d1R,C:S.d1C,RC:S.d1RC,RP:S.d1RP,LI:S.d1LI}; }
+
+  function addSS(val){
+    const s=String(val??'');
+    if(ssIdx[s]!==undefined) return ssIdx[s];
+    ssIdx[s]=sharedStrings.length; sharedStrings.push(s); return ssIdx[s];
+  }
+
+  function newSheet(){ return {rows:{},merges:[],colWidths:{},maxRow:0,maxCol:0}; }
+
+  function sc(sheet,r,c,t,v,si){
+    if(!sheet.rows[r]) sheet.rows[r]={};
+    sheet.rows[r][c]={t,v,s:si};
+    if(r>sheet.maxRow) sheet.maxRow=r;
+    if(c>sheet.maxCol) sheet.maxCol=c;
+  }
+  function str(sh,r,c,val,si){ sc(sh,r,c,'s',addSS(val),si); }
+  function num(sh,r,c,val,si){ sc(sh,r,c,'n',val,si); }
+  function blk(sh,r,c,si)    { sc(sh,r,c,'b',0,si); }
+  function mrg(sh,r1,c1,r2,c2){ sh.merges.push({r1,c1,r2,c2}); }
+  function cw(sh,c,w){ sh.colWidths[c]=w; }
+
+  function xe(s){ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function cl(n){ let s=''; while(n>0){let r=(n-1)%26;s=String.fromCharCode(65+r)+s;n=Math.floor((n-1)/26);} return s; }
+
+  function buildStylesXml(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    x+='<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    if(numFmts.length){ x+=`<numFmts count="${numFmts.length}">`; numFmts.forEach(f=>x+=`<numFmt numFmtId="${f.id}" formatCode="${xe(f.code)}"/>`); x+='</numFmts>'; }
+    x+=`<fonts count="${fonts.length}">`;
+    fonts.forEach(f=>{ x+='<font>'; if(f.bold)x+='<b/>'; if(f.italic)x+='<i/>'; x+=`<sz val="${f.sz}"/><color rgb="${f.color}"/><name val="${xe(f.name)}"/>`; x+='</font>'; });
+    x+='</fonts>';
+    x+=`<fills count="${fills.length}">`;
+    fills.forEach(f=>{ if(f.pattern==='none')x+='<fill><patternFill/></fill>'; else if(f.pattern==='gray125')x+='<fill><patternFill patternType="gray125"/></fill>'; else x+=`<fill><patternFill patternType="${f.pattern}"><fgColor rgb="${f.fg}"/></patternFill></fill>`; });
+    x+='</fills>';
+    x+=`<borders count="${borders.length}">`;
+    borders.forEach(b=>{ if(!b.has){x+='<border><left/><right/><top/><bottom/><diagonal/></border>';}else{const s=`style="thin"><color rgb="${b.color}"/`;x+=`<border><left ${s}></left><right ${s}></right><top ${s}></top><bottom ${s}></bottom><diagonal/></border>`;} });
+    x+='</borders>';
+    x+='<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>';
+    x+=`<cellXfs count="${cellXfs.length}">`;
+    cellXfs.forEach(xf=>{ const an=xf.nfId>0?'applyNumberFormat="1" ':'',af=xf.fillId>1?'applyFill="1" ':'',ab=xf.borderId>0?'applyBorder="1" ':''; x+=`<xf xfId="0" fontId="${xf.fontId}" fillId="${xf.fillId}" borderId="${xf.borderId}" numFmtId="${xf.nfId}" ${an}${af}${ab}applyFont="1" applyAlignment="1"><alignment horizontal="${xf.halign}" vertical="${xf.valign}" wrapText="0"/></xf>`; });
+    x+='</cellXfs>';
+    x+='<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    return x;
+  }
+
+  function buildSSXml(){
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    x+=`<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sharedStrings.length}" uniqueCount="${sharedStrings.length}">`;
+    sharedStrings.forEach(s=>x+=`<si><t xml:space="preserve">${xe(s)}</t></si>`);
+    x+='</sst>'; return x;
+  }
+
+  function buildSheetXml(sheet){
+    const maxC=sheet.maxCol, maxR=sheet.maxRow;
+    const dim=`A1:${cl(maxC)}${maxR}`;
+    let x='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    x+=`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="${dim}"/>`;
+    x+='<sheetViews><sheetView workbookViewId="0"><selection activeCell="A1" sqref="A1"/></sheetView></sheetViews>';
+    x+='<sheetFormatPr baseColWidth="8" defaultRowHeight="15"/>';
+    // col widths
+    const cmap={};
+    Object.entries(sheet.rows).forEach(([r,cols])=>Object.entries(cols).forEach(([c,cell])=>{
+      const cc=parseInt(c); let w=8;
+      if(cell.t==='s') w=Math.min(60,(sharedStrings[cell.v]||'').length*1.05+2);
+      else if(cell.t==='n'){
+        const xf=cellXfs[cell.s]||{}; const fmt=xf.nfId>0?(numFmts.find(f=>f.id===xf.nfId)||{code:''}).code:'';
+        w=fmt.includes('$')?Math.max(14,String(Math.abs(cell.v)).length+6):fmt.includes('%')?8:String(cell.v).length+2;
+      }
+      if(cell.s!==undefined){const xf=cellXfs[cell.s]||{};if(xf.fontId!==undefined&&fonts[xf.fontId]&&fonts[xf.fontId].bold)w=Math.ceil(w*1.05);}
+      if(!cmap[cc]||w>cmap[cc]) cmap[cc]=w;
+    }));
+    Object.entries(sheet.colWidths).forEach(([c,w])=>cmap[parseInt(c)]=w);
+    const cwKeys=Object.keys(cmap).map(Number).sort((a,b)=>a-b);
+    if(cwKeys.length){ x+='<cols>'; cwKeys.forEach(c=>x+=`<col min="${c}" max="${c}" width="${Math.min(60,Math.max(8,cmap[c]))}" customWidth="1"/>`); x+='</cols>'; }
+    x+='<sheetData>';
+    for(let r=1;r<=maxR;r++){
+      const rc=sheet.rows[r]; if(!rc){x+=`<row r="${r}"/>`; continue;}
+      x+=`<row r="${r}">`;
+      for(let c=1;c<=maxC;c++){
+        const cell=rc[c]; if(!cell) continue;
+        const addr=cl(c)+r;
+        if(cell.t==='b'||cell.v===''||cell.v===null||cell.v===undefined) x+=`<c r="${addr}" s="${cell.s}"/>`;
+        else if(cell.t==='s') x+=`<c r="${addr}" s="${cell.s}" t="s"><v>${cell.v}</v></c>`;
+        else x+=`<c r="${addr}" s="${cell.s}" t="n"><v>${cell.v}</v></c>`;
+      }
+      x+='</row>';
+    }
+    x+='</sheetData>';
+    if(sheet.merges.length){ x+=`<mergeCells count="${sheet.merges.length}">`; sheet.merges.forEach(m=>x+=`<mergeCell ref="${cl(m.c1)}${m.r1}:${cl(m.c2)}${m.r2}"/>`); x+='</mergeCells>'; }
+    x+='<pageMargins left="0.75" right="0.75" top="1" bottom="1" header="0.5" footer="0.5"/></worksheet>';
+    return x;
+  }
+
+  async function save(sheets, filename){
+    const zip=new JSZip();
+    zip.file('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+    let ct='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>';
+    sheets.forEach((_,i)=>ct+=`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`);
+    ct+='<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>';
+    zip.file('[Content_Types].xml',ct);
+    let wbRels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';
+    sheets.forEach((_,i)=>wbRels+=`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`);
+    wbRels+=`<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${sheets.length+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`;
+    zip.file('xl/_rels/workbook.xml.rels',wbRels);
+    let wb2='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>';
+    sheets.forEach((s,i)=>wb2+=`<sheet name="${xe(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`);
+    wb2+='</sheets></workbook>'; zip.file('xl/workbook.xml',wb2);
+    zip.file('xl/styles.xml',buildStylesXml());
+    zip.file('xl/sharedStrings.xml',buildSSXml());
+    sheets.forEach((s,i)=>zip.file(`xl/worksheets/sheet${i+1}.xml`,buildSheetXml(s)));
+    const blob=await zip.generateAsync({type:'blob',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+  }
+
+  return {initStyles, newSheet, str, num, blk, mrg, cw, ds:()=>ds, S:()=>S, save};
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SHEET BUILDERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function fmtAmt(n){ return (n<0?'-':'')+'$'+Math.abs(n).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
+function buildSummary(sheet, rows, dates, latD, catTotals, grandLatest, grandAll, acc, billNo) {
+  const {str,num,blk,mrg,cw,S,ds} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S(),ds:XB.ds()};
+  const s=S, numDates=dates.length, lastCol=Math.max(4, numDates+1);
+  let r=1;
+
+  const latDStr = latD ? new Date(latD).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const fnns = new Set(rows.map(x=>x['FNN'])).size;
+
+  // Banner
+  mrg(sheet,r,1,r,lastCol); str(sheet,r,1,`TELSTRA BILLING SUMMARY — ACCOUNT ${acc}`,s.banner);
+  for(let c=2;c<=lastCol;c++) blk(sheet,r,c,s.banner); r++;
+  mrg(sheet,r,1,r,lastCol); str(sheet,r,1,`Billing Period: ${dates[0]?new Date(dates[0]).toLocaleDateString('en-AU',{month:'short',year:'numeric'}):''} – ${latD?new Date(latD).toLocaleDateString('en-AU',{month:'short',year:'numeric'}):''} | Latest Bill: ${billNo} | Bill Date: ${latDStr}`,s.subBan);
+  for(let c=2;c<=lastCol;c++) blk(sheet,r,c,s.subBan); r++;
+
+  // KPI row
+  mrg(sheet,r,1,r,2); str(sheet,r,1,'LATEST BILL TOTAL',s.kpiLbl); blk(sheet,r,2,s.kpiLbl);
+  mrg(sheet,r,3,r,4); str(sheet,r,3,'ALL PERIODS TOTAL',s.kpiLbl); blk(sheet,r,4,s.kpiLbl);
+  mrg(sheet,r,5,r,lastCol); str(sheet,r,5,'TOTAL SERVICES',s.kpiLbl);
+  for(let c=6;c<=lastCol;c++) blk(sheet,r,c,s.kpiLbl); r++;
+
+  mrg(sheet,r,1,r,2); str(sheet,r,1,fmtAmt(grandLatest),s.kpiVal); blk(sheet,r,2,s.kpiVal);
+  mrg(sheet,r,3,r,4); str(sheet,r,3,fmtAmt(grandAll),s.kpiVal); blk(sheet,r,4,s.kpiVal);
+  mrg(sheet,r,5,r,lastCol); str(sheet,r,5,String(fnns),s.kpiVal);
+  for(let c=6;c<=lastCol;c++) blk(sheet,r,c,s.kpiVal); r++;
+
+  mrg(sheet,r,1,r,2); str(sheet,r,1,'Latest Bill',s.kpiSub); blk(sheet,r,2,s.kpiSub);
+  mrg(sheet,r,3,r,4); str(sheet,r,3,`${dates.length} billing period${dates.length!==1?'s':''}`,s.kpiSub); blk(sheet,r,4,s.kpiSub);
+  mrg(sheet,r,5,r,lastCol); str(sheet,r,5,'Unique service numbers',s.kpiSub);
+  for(let c=6;c<=lastCol;c++) blk(sheet,r,c,s.kpiSub); r++;
+
+  // Category breakdown
+  mrg(sheet,r,1,r,lastCol); str(sheet,r,1,'  COST BREAKDOWN — LATEST BILL',s.secHdr);
+  for(let c=2;c<=lastCol;c++) blk(sheet,r,c,s.secHdr); r++;
+  str(sheet,r,1,'Category',s.colHdrL); str(sheet,r,2,'Latest Bill Amount',s.colHdrR);
+  str(sheet,r,3,'% of Bill',s.colHdrR); str(sheet,r,4,'All Periods Total',s.colHdrR);
+  for(let c=5;c<=lastCol;c++) blk(sheet,r,c,s.colHdrC); r++;
+
+  catTotals.filter(x=>x.latest!==0||x.total!==0).forEach((item,i)=>{
+    const d=ds(i); const pct=grandLatest?item.latest/grandLatest:0;
+    str(sheet,r,1,item.cat,d.L); num(sheet,r,2,item.latest,d.RC); num(sheet,r,3,pct,d.RP); num(sheet,r,4,item.total,d.RC);
+    for(let c=5;c<=lastCol;c++) blk(sheet,r,c,d.L); r++;
+  });
+  str(sheet,r,1,'TOTAL',s.totalL); num(sheet,r,2,grandLatest,s.totalR); num(sheet,r,3,1.0,s.totalP); num(sheet,r,4,grandAll,s.totalR);
+  for(let c=5;c<=lastCol;c++) blk(sheet,r,c,s.totalL); r++;
+
+  // Monthly trend
+  r++;
+  mrg(sheet,r,1,r,lastCol); str(sheet,r,1,'  MONTHLY BILLING TREND',s.secHdr);
+  for(let c=2;c<=lastCol;c++) blk(sheet,r,c,s.secHdr); r++;
+  str(sheet,r,1,'Bill Month',s.colHdrL);
+  dates.forEach((d,i)=>str(sheet,r,i+2,new Date(d).toLocaleDateString('en-AU',{month:'short',year:'numeric'}),s.colHdrC)); r++;
+  str(sheet,r,1,'Total ($)',s.tHdr);
+  const monthly=dates.map(d=>rows.filter(x=>x['BILL DATE']===d).reduce((s,x)=>s+(x['AMOUNT $']||0),0));
+  monthly.forEach((v,i)=>num(sheet,r,i+2,v,ds(0).RC)); r++;
+
+  cw(sheet,1,38); cw(sheet,2,22); cw(sheet,3,12); cw(sheet,4,22);
+  dates.forEach((_,i)=>cw(sheet,i+2,14));
+}
+
+function buildInventory(sheet, rows, latD) {
+  const {str,num,blk,mrg,cw,S,ds} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S(),ds:XB.ds()};
+  const s=S; let r=1;
+
+  mrg(sheet,r,1,r,5); str(sheet,r,1,`SERVICE INVENTORY — ACCOUNT ${(rows[0]||{})['ACCOUNT #']||''}`,s.banner);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.banner); r++;
+  mrg(sheet,r,1,r,5); str(sheet,r,1,'All services billed — grouped by category',s.subBan);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.subBan); r++;
+  cw(sheet,1,44); cw(sheet,2,20); cw(sheet,3,20); cw(sheet,4,14); cw(sheet,5,30);
+
+  // Group by main category
+  const catMap={};
+  rows.forEach(row=>{
+    const [cat]=categorize(row['DESCRIPTION']);
+    if(!catMap[cat]) catMap[cat]=[];
+    catMap[cat].push(row);
+  });
+
+  Object.keys(catMap).sort().forEach(cat=>{
+    const cr=catMap[cat]; if(!cr.length) return;
+    mrg(sheet,r,1,r,5); str(sheet,r,1,`  ${cat.toUpperCase()}`,s.secHdr);
+    for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+    str(sheet,r,1,'Service / Description',s.colHdrL); str(sheet,r,2,'Latest Bill',s.colHdrR);
+    str(sheet,r,3,'All Periods Total',s.colHdrR); str(sheet,r,4,'Count',s.colHdrR); str(sheet,r,5,'Type',s.colHdrL); r++;
+
+    const dm={};
+    cr.forEach(row=>{
+      const d=row['DESCRIPTION'];
+      if(!dm[d]) dm[d]={total:0,count:0,latAmt:0,type:row['TYPE']||''};
+      dm[d].total+=row['AMOUNT $']||0;
+      dm[d].count++;
+      if(row['BILL DATE']===latD) dm[d].latAmt+=row['AMOUNT $']||0;
+    });
+    let sl=0, sa=0;
+    Object.entries(dm).sort((a,b)=>b[1].total-a[1].total).forEach(([desc,data],i)=>{
+      const d=ds(i);
+      str(sheet,r,1,desc,d.L); num(sheet,r,2,data.latAmt,d.RC); num(sheet,r,3,data.total,d.RC);
+      num(sheet,r,4,data.count,d.R); str(sheet,r,5,data.type,d.L); r++;
+      sl+=data.latAmt; sa+=data.total;
+    });
+    str(sheet,r,1,`Subtotal – ${cat}`,s.totalL); num(sheet,r,2,sl,s.totalR); num(sheet,r,3,sa,s.totalR);
+    blk(sheet,r,4,s.totalL); blk(sheet,r,5,s.totalL); r++; r++;
+  });
+}
+
+function buildLicences(sheet, rows, dates, latD) {
+  const {str,num,blk,mrg,cw,S,ds} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S(),ds:XB.ds()};
+  const s=S; let r=1;
+  const licRows = rows.filter(x=>x['Category']==='Microsoft 365 Licences');
+  const nc = Math.min(1+dates.length, 14);
+
+  mrg(sheet,r,1,r,nc); str(sheet,r,1,`MICROSOFT LICENCE SUMMARY — ACCOUNT ${(rows[0]||{})['ACCOUNT #']||''}`,s.banner);
+  for(let c=2;c<=nc;c++) blk(sheet,r,c,s.banner); r++;
+  if(!licRows.length){
+    mrg(sheet,r,1,r,nc); str(sheet,r,1,'No Microsoft licence charges found in this report.',s.subBan);
+    for(let c=2;c<=nc;c++) blk(sheet,r,c,s.subBan); return;
+  }
+  mrg(sheet,r,1,r,nc); str(sheet,r,1,'Licence costs billed via Telstra',s.subBan);
+  for(let c=2;c<=nc;c++) blk(sheet,r,c,s.subBan); r++;
+  cw(sheet,1,45); dates.forEach((_,i)=>cw(sheet,i+2,14));
+
+  // Group by subCategory then normalised licence name
+  function normLicence(desc) {
+    const d=String(desc);
+    // Strip trailing "NC N @ $X.XX_User DD Mon YY - DD Mon YY" pattern — keep the product name
+    return d.replace(/\s+NC\s+-?\d+\s*@\s*\$[\d.]+_User.*$/i,'').replace(/\s+Add\s+-?\d+\s*@\s*\$[\d.]+_User.*$/i,'').trim();
+  }
+
+  const subCats=['M365','Power BI','Project','Visio','Teams & Add-ons'];
+  subCats.forEach(sub=>{
+    const sr=licRows.filter(x=>x['SubCategory']===sub); if(!sr.length) return;
+    mrg(sheet,r,1,r,nc); str(sheet,r,1,`  ${sub.toUpperCase()}`,s.secHdr);
+    for(let c=2;c<=nc;c++) blk(sheet,r,c,s.secHdr); r++;
+    str(sheet,r,1,'Licence',s.colHdrL);
+    dates.slice(0,nc-1).forEach((d,i)=>str(sheet,r,i+2,new Date(d).toLocaleDateString('en-AU',{month:'short',year:'numeric'}),s.colHdrC)); r++;
+
+    const lm={};
+    sr.forEach(row=>{
+      const nm=normLicence(row['DESCRIPTION']);
+      if(!lm[nm]) lm[nm]={};
+      lm[nm][row['BILL DATE']]=(lm[nm][row['BILL DATE']]||0)+(row['AMOUNT $']||0);
+    });
+
+    Object.entries(lm).forEach(([lic,bd],i)=>{
+      const d=ds(i); str(sheet,r,1,lic,d.L);
+      dates.slice(0,nc-1).forEach((dt,ci)=>num(sheet,r,ci+2,bd[dt]||0,d.RC)); r++;
+    });
+    str(sheet,r,1,'Monthly Total',s.totalL);
+    dates.slice(0,nc-1).forEach((dt,ci)=>{ const v=sr.filter(x=>x['BILL DATE']===dt).reduce((s,x)=>s+(x['AMOUNT $']||0),0); num(sheet,r,ci+2,v,s.totalR); }); r++; r++;
+  });
+}
+
+function buildMobile(sheet, rows, latD) {
+  const {str,num,blk,mrg,cw,S,ds} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S(),ds:XB.ds()};
+  const s=S; let r=1;
+  const mobRows=rows.filter(x=>x['Category']==='Mobile Plans & Data');
+  const fnns=new Set(mobRows.map(x=>x['FNN'])).size;
+
+  mrg(sheet,r,1,r,5); str(sheet,r,1,`MOBILE SERVICES — ACCOUNT ${(rows[0]||{})['ACCOUNT #']||''}`,s.banner);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.banner); r++;
+  mrg(sheet,r,1,r,5); str(sheet,r,1,`Total mobile service numbers: ${fnns}`,s.subBan);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.subBan); r++;
+  cw(sheet,1,38); cw(sheet,2,14); cw(sheet,3,22); cw(sheet,4,22); cw(sheet,5,36);
+
+  if(!mobRows.length){
+    mrg(sheet,r,1,r,5); str(sheet,r,1,'No mobile charges found in this report.',s.subBan);
+    for(let c=2;c<=5;c++) blk(sheet,r,c,s.subBan); return;
+  }
+
+  // Group by SubCategory
+  const subGroups=['Adaptive / New Plans','Legacy Plans','Handsets & Repayments','Mobile Features & Add-ons'];
+  subGroups.forEach(sub=>{
+    const sr=mobRows.filter(x=>x['SubCategory']===sub); if(!sr.length) return;
+    mrg(sheet,r,1,r,5); str(sheet,r,1,`  ${sub.toUpperCase()}`,s.secHdr);
+    for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+    str(sheet,r,1,'Description',s.colHdrL); str(sheet,r,2,'Count',s.colHdrR);
+    str(sheet,r,3,'Latest Bill',s.colHdrR); str(sheet,r,4,'All Periods Total',s.colHdrR); str(sheet,r,5,'Type',s.colHdrL); r++;
+
+    const dm={};
+    sr.forEach(row=>{
+      const d=row['DESCRIPTION'];
+      if(!dm[d]) dm[d]={total:0,count:0,latAmt:0,type:row['TYPE']||''};
+      dm[d].total+=row['AMOUNT $']||0; dm[d].count++;
+      if(row['BILL DATE']===latD) dm[d].latAmt+=row['AMOUNT $']||0;
+    });
+    let sl=0,sa=0;
+    Object.entries(dm).sort((a,b)=>b[1].total-a[1].total).forEach(([desc,data],i)=>{
+      const d=ds(i);
+      str(sheet,r,1,desc,d.L); num(sheet,r,2,data.count,d.R); num(sheet,r,3,data.latAmt,d.RC); num(sheet,r,4,data.total,d.RC); str(sheet,r,5,data.type,d.L); r++;
+      sl+=data.latAmt; sa+=data.total;
+    });
+    str(sheet,r,1,`Subtotal – ${sub}`,s.totalL); blk(sheet,r,2,s.totalL); num(sheet,r,3,sl,s.totalR); num(sheet,r,4,sa,s.totalR); blk(sheet,r,5,s.totalL); r++; r++;
+  });
+
+  // Usage breakdown
+  const usageCats=['International & Roaming','Call Charges','Messaging Services','IoT / M2M Data','Satellite Services'];
+  const usageRows=rows.filter(x=>usageCats.includes(x['Category'])); if(!usageRows.length) return;
+  mrg(sheet,r,1,r,5); str(sheet,r,1,'  USAGE & OTHER CHARGES',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+  str(sheet,r,1,'Category',s.colHdrL); str(sheet,r,2,'Count',s.colHdrR); str(sheet,r,3,'Latest Bill',s.colHdrR); str(sheet,r,4,'All Periods Total',s.colHdrR); str(sheet,r,5,'Notes',s.colHdrL); r++;
+
+  const notes={'International & Roaming':'International calls, roaming, day passes','Call Charges':'Local, STD, mobile, 13 number calls','Messaging Services':'SMS, MMS, MessageBank','IoT / M2M Data':'M2M, wireless data, IoT plans','Satellite Services':'Satellite plans and usage'};
+  usageCats.forEach((cat,i)=>{
+    const cr=usageRows.filter(x=>x['Category']===cat); if(!cr.length) return;
+    const d=ds(i);
+    const la=rows.filter(x=>x['Category']===cat&&x['BILL DATE']===latD).reduce((s,x)=>s+(x['AMOUNT $']||0),0);
+    const aa=rows.filter(x=>x['Category']===cat).reduce((s,x)=>s+(x['AMOUNT $']||0),0);
+    str(sheet,r,1,cat,d.L); num(sheet,r,2,cr.length,d.R); num(sheet,r,3,la,d.RC); num(sheet,r,4,aa,d.RC); str(sheet,r,5,notes[cat]||'',d.LI); r++;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TELSTRA ENTERPRISE FUND — ELIGIBILITY ENGINE & CALCULATOR BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
+// Eligible Contributions (per TEF Checklist):
+//   G12  Data & IP     10%  TID Lite, BIP, Connect IP, TBB, Telstra Fibre, NBN EE, TWS
+//   G16  Cloud+PS       5%  Manual — PS context cannot be inferred from ION data
+//   G22  Cloud w/o PS   5%  M365/O365 licences (⚠ needs Telstra approval)
+//   G25  UC             5%  SIP Complete, SIP Connect, TIPT, Business SIP, TCO 365 calling
+//   G28  Security       5%  Managed GW, DoS, SecureEdge, MNGSFW, Security Monitoring
+//   G31  Contract term  —   months — selectable by user
+//
+// Excluded: Mobility, Satellite, Roaming, Call Charges, Hardware, Once-off fees
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function computeFundInputs(rows, latD) {
+  // Returns monthly amounts for each Funds Calculator input field (latest bill only)
+  const lat = rows.filter(x => x['BILL DATE'] === latD);
+
+  let g12 = 0, g22 = 0, g25 = 0, g28 = 0;
+
+  lat.forEach(row => {
+    const desc = String(row['DESCRIPTION'] || '').trim();
+    const d    = desc.toLowerCase();
+    const amt  = parseFloat(row['AMOUNT $']) || 0;
+    const cat  = row['Category']  || '';
+    const sub  = row['SubCategory'] || '';
+
+    // ── Data & IP (G12, 10%) ─────────────────────────────────────────────────
+    // TID Lite, BIP, Connect IP, TBB, Telstra Fibre, NBN EE, TWS — recurring only
+    if (cat === 'Internet & Connectivity') {
+      // Exclude installation / activation / once-off fees and speed tier add-ons
+      if (!/install|activation|connect\s+fee|once.?off|upfront|standard plus speed/i.test(desc)) {
+        g12 += amt;
+      }
+    }
+
+    // ── Cloud without PS (G22, 5%) ───────────────────────────────────────────
+    // M365/O365 licences — EXCLUDES TCO365 calling (that is UC)
+    if (cat === 'Microsoft 365 Licences') {
+      if (!/tco\s*365/i.test(desc)) {
+        g22 += amt;
+      }
+    }
+
+    // ── UC — Unified Communications (G25, 5%) ────────────────────────────────
+    // SIP Complete, SIP Connect, TIPT, Business SIP — and TCO 365 calling add-ons
+    if (cat === 'Voice & Fixed Line' && sub === 'SIP & VoIP') {
+      g25 += amt;
+    }
+    if (cat === 'Microsoft 365 Licences' && /tco\s*365/i.test(desc)) {
+      g25 += amt;
+    }
+
+    // ── Security (G28, 5%) ───────────────────────────────────────────────────
+    // Managed Gateway, DoS Protection, SecureEdge, MNGSFW, Security Monitoring
+    if (cat === 'Managed Network Services') {
+      g28 += amt;
+    }
+  });
+
+  return {
+    g12: Math.round(g12 * 100) / 100,
+    g22: Math.round(g22 * 100) / 100,
+    g25: Math.round(g25 * 100) / 100,
+    g28: Math.round(g28 * 100) / 100,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildFundsCalculator — outputs a sheet mirroring the TEF Funds Calculator tab
+// with yellow input cells auto-populated from ION billing data.
+// ─────────────────────────────────────────────────────────────────────────────
+function buildFundsCalculator(sheet, rows, latD, acc, contractMonths) {
+  const {str,num,blk,mrg,cw,S} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S()};
+  const s = S;
+
+  // Add a yellow-input style — closest available in palette is totalR (highlighted)
+  // We'll use totalL/totalR for auto-filled cells so they stand out visually
+  const ft  = computeFundInputs(rows, latD);
+  const mo  = contractMonths || 36;
+  const latDStr = latD ? new Date(latD).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : 'N/A';
+
+  // ── Column widths ──────────────────────────────────────────────────────────
+  cw(sheet,1,40); cw(sheet,2,18); cw(sheet,3,12); cw(sheet,4,18); cw(sheet,5,42);
+
+  let r = 1;
+
+  // ── Title banner ──────────────────────────────────────────────────────────
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'TELSTRA ENTERPRISE FUND — FUNDS CALCULATOR',s.banner);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.banner); r++;
+
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,`Account: ${acc}   |   Latest bill: ${latDStr}   |   Contract term: ${mo} months`,s.subBan);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.subBan); r++;
+
+  // ── Important rules box ───────────────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'  ⚠  KEY RULES — Read before submitting to Funds Helpdesk',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+  const rules = [
+    '• MMC (Minimum Monthly Commitment) must be $1,000 min and $250,000 max. Amounts outside this range require Funds Helpdesk approval.',
+    '• Mobility spend is NOT eligible for TEF — use Adaptive Mobility Fund instead.',
+    '• Customers with TEF cannot also have bespoke discounts (e.g. TPA) for the same service.',
+    '• Cloud / M365 contributions are subject to Telstra approval — do not include without prior sign-off from Funds Helpdesk.',
+    '• Once-off charges, installation fees, and hardware are excluded from all eligible spend.',
+  ];
+  rules.forEach((rule, i) => {
+    const ds = i % 2 === 0 ? s.d0L : s.d1L;
+    mrg(sheet,r,1,r,5); str(sheet,r,1,rule,ds);
+    for(let c=2;c<=5;c++) blk(sheet,r,c,ds); r++;
+  });
+
+  // ── Main input table ──────────────────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'  DOLLAR COMMITMENT INPUTS — auto-filled from latest ION billing period',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+  // Header row
+  str(sheet,r,1,'Category (Funds Calculator field)',s.colHdrL);
+  str(sheet,r,2,'Monthly Spend (auto)',s.colHdrR);
+  str(sheet,r,3,'Fund Rate',s.colHdrR);
+  str(sheet,r,4,'Monthly Fund $',s.colHdrR);
+  str(sheet,r,5,'What is included',s.colHdrL); r++;
+
+  // Category rows — use totalL/totalR for auto-filled amounts (cyan, stands out)
+  const cats = [
+    {
+      field: 'Data & IP  (G12)',
+      val:   ft.g12,
+      rate:  0.10,
+      auto:  true,
+      note:  'TID Lite, BIP, Connect IP, TBB, Telstra Fibre, NBN EE, TWS — monthly recurring charges',
+    },
+    {
+      field: 'Cloud with PS  (G16)',
+      val:   0,
+      rate:  0.05,
+      auto:  false,
+      note:  '⚠ Manual input required — PS context cannot be derived from billing data alone',
+    },
+    {
+      field: 'Cloud without PS  (G22)',
+      val:   ft.g22,
+      rate:  0.05,
+      auto:  true,
+      note:  '⚠ NEEDS APPROVAL — M365/O365 licences detected in ION data. Contact Funds Helpdesk before including.',
+    },
+    {
+      field: 'UC — Unified Communications  (G25)',
+      val:   ft.g25,
+      rate:  0.05,
+      auto:  true,
+      note:  'SIP Complete, SIP Connect, TIPT, Business SIP, Standard/Premium Calling TCO 365',
+    },
+    {
+      field: 'Security  (G28)',
+      val:   ft.g28,
+      rate:  0.05,
+      auto:  true,
+      note:  'Managed Gateway, DoS Protection, SecureEdge, MNGSFW, Security Monitoring',
+    },
+  ];
+
+  cats.forEach((cat, i) => {
+    const fund = cat.val * cat.rate;
+    // Auto-filled rows: use totalL/totalR (cyan highlight) — matches yellow intent
+    // Manual rows: use standard alternating data style
+    const lblSty  = cat.auto ? s.totalL  : (i%2===0 ? s.d0L  : s.d1L);
+    const numSty  = cat.auto ? s.totalR  : (i%2===0 ? s.d0RC : s.d1RC);
+    const rateSty = cat.auto ? s.totalL  : (i%2===0 ? s.d0R  : s.d1R);
+    const noteSty = cat.auto ? s.totalL  : (i%2===0 ? s.d0LI : s.d1LI);
+
+    str(sheet,r,1,cat.field,lblSty);
+    num(sheet,r,2,cat.val,numSty);
+    str(sheet,r,3,(cat.rate*100).toFixed(0)+'%',rateSty);
+    num(sheet,r,4,fund,numSty);
+    str(sheet,r,5,cat.note,noteSty); r++;
+  });
+
+  // ── Contract duration row ─────────────────────────────────────────────────
+  str(sheet,r,1,'Contract Duration  (G31)',s.totalL);
+  num(sheet,r,2,mo,s.totalR);
+  str(sheet,r,3,'months',s.totalL);
+  blk(sheet,r,4,s.totalL);
+  str(sheet,r,5,'Verify against signed contract — default shown is 36 months',s.totalL); r++;
+
+  // ── Summary calculation section ───────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'  FUNDS CALCULATION — SUMMARY',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+  str(sheet,r,1,'Metric',s.colHdrL);
+  str(sheet,r,2,'Value',s.colHdrR);
+  str(sheet,r,3,'',s.colHdrL);
+  str(sheet,r,4,'',s.colHdrL);
+  str(sheet,r,5,'Notes',s.colHdrL); r++;
+
+  // Compute totals (matching Funds Calculator logic: Fund = Rate × G-field × Months)
+  const fundDataIP   = ft.g12 * 0.10 * mo;
+  const fundCloudPS  = 0;
+  const fundCloud    = ft.g22 * 0.05 * mo;
+  const fundUC       = ft.g25 * 0.05 * mo;
+  const fundSecurity = ft.g28 * 0.05 * mo;
+  const fundTotal    = fundDataIP + fundCloudPS + fundCloud + fundUC + fundSecurity;
+
+  const mmc_monthly  = ft.g12 + ft.g22 + ft.g25 + ft.g28;
+  const mmc_clamped  = Math.max(1000, Math.min(250000, Math.round(mmc_monthly)));
+
+  // Funds Calculation rows (mirrors =K*G*G31 formula from original)
+  const calcRows = [
+    ['Data & IP fund  (=10% × G12 × G31)',   fundDataIP,   `$${ft.g12.toLocaleString('en-AU',{minimumFractionDigits:2})} × 10% × ${mo}mo`],
+    ['Cloud without PS fund  (=5% × G22 × G31)', fundCloud, ft.g22>0 ? `⚠ Needs approval — $${ft.g22.toLocaleString('en-AU',{minimumFractionDigits:2})} × 5% × ${mo}mo` : '$0 — no M365 licences detected'],
+    ['UC fund  (=5% × G25 × G31)',           fundUC,       `$${ft.g25.toLocaleString('en-AU',{minimumFractionDigits:2})} × 5% × ${mo}mo`],
+    ['Security fund  (=5% × G28 × G31)',     fundSecurity,  ft.g28>0 ? `$${ft.g28.toLocaleString('en-AU',{minimumFractionDigits:2})} × 5% × ${mo}mo` : '$0 — no managed security services detected'],
+    ['Cloud with PS fund  (=5% × G16 × G31)', fundCloudPS,  'Manual input required — enter G16 spend in Funds Calculator'],
+  ];
+  calcRows.forEach(([label,val,note],i) => {
+    const ds = i%2===0 ? {L:s.d0L,RC:s.d0RC,LI:s.d0LI} : {L:s.d1L,RC:s.d1RC,LI:s.d1LI};
+    str(sheet,r,1,label,ds.L); num(sheet,r,2,val,ds.RC);
+    blk(sheet,r,3,ds.L); blk(sheet,r,4,ds.L);
+    str(sheet,r,5,note,ds.LI); r++;
+  });
+
+  // Grand total (matches =M12+M16+M22+M25+M28)
+  str(sheet,r,1,'TOTAL FUND VALUE  (M12+M16+M22+M25+M28)',s.totalL);
+  num(sheet,r,2,fundTotal,s.totalR);
+  blk(sheet,r,3,s.totalL); blk(sheet,r,4,s.totalL);
+  str(sheet,r,5,`Full ${mo}-month contract fund (excl. Cloud+PS — manual input required)`,s.totalL); r++;
+
+  // ── Monthly commitment summary ─────────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'  MONTHLY COMMITMENT (MMC)',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+  const mmcRows = [
+    ['Total monthly eligible spend',    mmc_monthly,  '$1,000 min / $250,000 max per month'],
+    ['Recommended MMC',                 mmc_clamped,  mmc_monthly < 1000 ? '⚠ Below $1,000 minimum — Funds Helpdesk approval required' : mmc_monthly > 250000 ? '⚠ Exceeds $250,000 maximum — Funds Helpdesk approval required' : '✓ Within TEF MMC limits'],
+    ['Monthly fund value (all cats)',   fundTotal/mo, `Total fund ÷ ${mo} months`],
+  ];
+  mmcRows.forEach(([label,val,note],i) => {
+    const ds = i%2===0 ? {L:s.d0L,RC:s.d0RC,L2:s.d0L} : {L:s.d1L,RC:s.d1RC,L2:s.d1L};
+    str(sheet,r,1,label,ds.L); num(sheet,r,2,val,ds.RC);
+    blk(sheet,r,3,ds.L); blk(sheet,r,4,ds.L);
+    str(sheet,r,5,note,ds.L); r++;
+  });
+
+  // ── Excluded spend breakdown ───────────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'  EXCLUDED SPEND — not eligible for Telstra Enterprise Fund',s.secHdr);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+  str(sheet,r,1,'Category',s.colHdrL);
+  str(sheet,r,2,'Monthly Amount',s.colHdrR);
+  str(sheet,r,3,'',s.colHdrL);
+  str(sheet,r,4,'',s.colHdrL);
+  str(sheet,r,5,'Reason excluded',s.colHdrL); r++;
+
+  const latRows = rows.filter(x => x['BILL DATE'] === latD);
+  const excluded = [
+    ['Mobile Plans & Data',    'Mobility explicitly excluded — use Adaptive Mobility Fund'],
+    ['International & Roaming','Usage charges — not recurring monthly service charge'],
+    ['Call Charges',           'Usage charges — not in Eligible Contributions List'],
+    ['Number Services',        'Not listed in Eligible Contributions List'],
+    ['Hardware & Equipment',   'Devices and hardware explicitly excluded from TEF'],
+    ['Discounts & Credits',    'Contract discounts reduce eligible base — not a separate contribution'],
+    ['Satellite Services',     'Not listed in Eligible Contributions List'],
+    ['Messaging Services',     'Not listed in Eligible Contributions List'],
+    ['Other Services',         'Miscellaneous / once-off fees excluded'],
+  ];
+  let exclIdx = 0;
+  excluded.forEach(([cat, reason]) => {
+    const amt2 = latRows.filter(x=>x['Category']===cat).reduce((s,x)=>s+(x['AMOUNT $']||0),0);
+    if (Math.abs(amt2) < 0.01) return;
+    const ds = exclIdx%2===0 ? {L:s.d0L,RC:s.d0RC} : {L:s.d1L,RC:s.d1RC};
+    str(sheet,r,1,cat,ds.L);
+    num(sheet,r,2,amt2,ds.RC);
+    blk(sheet,r,3,ds.L); blk(sheet,r,4,ds.L);
+    str(sheet,r,5,reason,ds.L); r++;
+    exclIdx++;
+  });
+
+  // ── Footer ─────────────────────────────────────────────────────────────────
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'⚡ Auto-generated from ION billing data. Verify all figures against contracted services before submitting. Cloud contributions require prior Telstra Funds Helpdesk approval.',s.d0LI);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.d0LI);
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// buildFundBreakdown — lists every individual line item contributing to each
+// TEF fund category, grouped with subtotals and a grand total.
+// ─────────────────────────────────────────────────────────────────────────────
+function buildFundBreakdown(sheet, rows, latD, acc) {
+  const {str,num,blk,mrg,cw,S} = {str:XB.str,num:XB.num,blk:XB.blk,mrg:XB.mrg,cw:XB.cw,S:XB.S()};
+  const s = S;
+  const latDStr = latD ? new Date(latD).toLocaleDateString('en-AU',{day:'2-digit',month:'short',year:'numeric'}) : 'N/A';
+
+  // Column widths: FNN | Description | Type | Amount | Category
+  cw(sheet,1,22); cw(sheet,2,52); cw(sheet,3,10); cw(sheet,4,16); cw(sheet,5,32);
+
+  let r = 1;
+
+  // ── Title ──────────────────────────────────────────────────────────────────
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'TELSTRA ENTERPRISE FUND — ELIGIBLE LINE ITEM BREAKDOWN',s.banner);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.banner); r++;
+
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,`Account: ${acc}   |   Latest bill: ${latDStr}   |   Items from latest billing period only`,s.subBan);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.subBan); r++;
+
+  const lat = rows.filter(x => x['BILL DATE'] === latD);
+
+  // Build per-row eligibility — mirrors computeFundInputs logic exactly
+  const sections = [
+    {
+      key:   'g12',
+      label: 'DATA & IP  (G12 — 10%)',
+      rate:  0.10,
+      items: [],
+    },
+    {
+      key:   'g22',
+      label: 'CLOUD WITHOUT PS  (G22 — 5%)  ⚠ Requires Telstra approval',
+      rate:  0.05,
+      items: [],
+    },
+    {
+      key:   'g25',
+      label: 'UC — UNIFIED COMMUNICATIONS  (G25 — 5%)',
+      rate:  0.05,
+      items: [],
+    },
+    {
+      key:   'g28',
+      label: 'SECURITY  (G28 — 5%)',
+      rate:  0.05,
+      items: [],
+    },
+  ];
+
+  lat.forEach(row => {
+    const desc = String(row['DESCRIPTION'] || '').trim();
+    const fnn  = String(row['FNN'] || '').trim();
+    const type = String(row['TYPE'] || '').trim();
+    const amt  = parseFloat(row['AMOUNT $']) || 0;
+    const cat  = row['Category']  || '';
+    const sub  = row['SubCategory'] || '';
+
+    if (cat === 'Internet & Connectivity') {
+      if (!/install|activation|connect\s+fee|once.?off|upfront|standard plus speed/i.test(desc)) {
+        sections[0].items.push({fnn, desc, type, amt});
+      }
+    }
+    if (cat === 'Microsoft 365 Licences' && !/tco\s*365/i.test(desc)) {
+      sections[1].items.push({fnn, desc, type, amt});
+    }
+    if (cat === 'Voice & Fixed Line' && sub === 'SIP & VoIP') {
+      sections[2].items.push({fnn, desc, type, amt});
+    }
+    if (cat === 'Microsoft 365 Licences' && /tco\s*365/i.test(desc)) {
+      sections[2].items.push({fnn, desc, type, amt});
+    }
+    if (cat === 'Managed Network Services') {
+      sections[3].items.push({fnn, desc, type, amt});
+    }
+  });
+
+  // Consolidate duplicate desc+fnn combos for readability
+  function consolidate(items) {
+    const map = new Map();
+    items.forEach(({fnn, desc, type, amt}) => {
+      const key = desc + '||' + type;
+      if (!map.has(key)) map.set(key, {fnn, desc, type, amt: 0, count: 0});
+      map.get(key).amt   += amt;
+      map.get(key).count += 1;
+    });
+    return [...map.values()].sort((a,b) => b.amt - a.amt);
+  }
+
+  let grandTotal = 0;
+
+  sections.forEach(sec => {
+    const consolidated = consolidate(sec.items);
+    const subtotal = consolidated.reduce((s,x) => s + x.amt, 0);
+    if (subtotal === 0 && consolidated.length === 0) return; // skip empty sections
+
+    r++;
+    // Section header
+    mrg(sheet,r,1,r,5);
+    str(sheet,r,1,'  ' + sec.label, s.secHdr);
+    for(let c=2;c<=5;c++) blk(sheet,r,c,s.secHdr); r++;
+
+    // Column headers
+    str(sheet,r,1,'FNN / Service Number',s.colHdrL);
+    str(sheet,r,2,'Description',s.colHdrL);
+    str(sheet,r,3,'Type',s.colHdrL);
+    str(sheet,r,4,'Amount ($)',s.colHdrR);
+    str(sheet,r,5,'Lines',s.colHdrL); r++;
+
+    if (consolidated.length === 0) {
+      mrg(sheet,r,1,r,5);
+      str(sheet,r,1,'  No eligible items detected in latest billing period',s.d0LI);
+      for(let c=2;c<=5;c++) blk(sheet,r,c,s.d0LI); r++;
+    } else {
+      consolidated.forEach((item, i) => {
+        const ds = i%2===0 ? {L:s.d0L, R:s.d0RC, LI:s.d0LI} : {L:s.d1L, R:s.d1RC, LI:s.d1LI};
+        str(sheet,r,1, item.fnn || '—', ds.L);
+        str(sheet,r,2, item.desc, ds.L);
+        str(sheet,r,3, item.type, ds.L);
+        num(sheet,r,4, item.amt, ds.R);
+        str(sheet,r,5, item.count > 1 ? `${item.count} lines` : '1 line', ds.LI);
+        r++;
+      });
+
+      // Subtotal row
+      str(sheet,r,1,`Subtotal — ${sec.label.split('(')[0].trim()}`,s.totalL);
+      blk(sheet,r,2,s.totalL); blk(sheet,r,3,s.totalL);
+      num(sheet,r,4,subtotal,s.totalR);
+      str(sheet,r,5,`${(sec.rate*100).toFixed(0)}% fund rate → $${(subtotal*sec.rate).toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})}/month`,s.totalL);
+      r++;
+    }
+
+    grandTotal += subtotal;
+  });
+
+  // Grand total
+  r++;
+  str(sheet,r,1,'TOTAL ELIGIBLE MONTHLY SPEND',s.totalL);
+  blk(sheet,r,2,s.totalL); blk(sheet,r,3,s.totalL);
+  num(sheet,r,4,grandTotal,s.totalR);
+  str(sheet,r,5,'Sum of all fund-eligible categories (excl. Cloud+PS — manual)',s.totalL); r++;
+
+  // Footer
+  r++;
+  mrg(sheet,r,1,r,5);
+  str(sheet,r,1,'⚡ Items shown are from the latest billing period only. Descriptions with multiple service numbers are consolidated into a single row showing the combined amount and line count.',s.d0LI);
+  for(let c=2;c<=5;c++) blk(sheet,r,c,s.d0LI);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN PROCESSING
+// ═══════════════════════════════════════════════════════════════════════════════
+let loadedData=null;
+
+async function processFile(file){
+  document.getElementById('config-panel').style.display='';
+  const buf=await file.arrayBuffer();
+  let wb;
+  try{ wb=XLSX.read(buf,{type:'array',cellDates:true}); }
+  catch(e){ alert('Could not parse file: '+e.message); return; }
+
+  const sheetName=findDataSheet(wb);
+  const raw=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{defval:null});
+
+  const rows = raw.map(row=>{
+    const n=normaliseRow(row);
+    // Normalise date
+    let d=n['BILL DATE'];
+    if(d instanceof Date) d=d.toISOString().slice(0,10);
+    else if(typeof d==='number') d=new Date(Math.round((d-25569)*86400*1000)).toISOString().slice(0,10);
+    else d=String(d||'').slice(0,10);
+    n['BILL DATE']=d;
+    n['AMOUNT $']=parseFloat(n['AMOUNT $'])||0;
+    const [cat,sub]=categorize(n['DESCRIPTION']);
+    n['Category']=cat; n['SubCategory']=sub;
+    return n;
+  }).filter(r=>r['BILL DATE']&&r['BILL DATE'].length===10);
+
+  const dates=[...new Set(rows.map(x=>x['BILL DATE']))].filter(Boolean).sort();
+  const latD=dates[dates.length-1];
+  const billNo=(rows.find(x=>x['BILL DATE']===latD)||{})['BILL #']||'';
+  const acc=(rows[0]||{})['ACCOUNT #']||'';
+  const fnns=new Set(rows.map(x=>x['FNN'])).size;
+
+  // Show category breakdown
+  const catSet=[...new Set(rows.map(x=>x['Category']))];
+  const catTotals=catSet.map(cat=>({
+    cat, latest:rows.filter(x=>x['Category']===cat&&x['BILL DATE']===latD).reduce((s,x)=>s+(x['AMOUNT $']||0),0),
+    total:rows.filter(x=>x['Category']===cat).reduce((s,x)=>s+(x['AMOUNT $']||0),0)
+  })).sort((a,b)=>b.total-a.total);
+
+
+  document.getElementById('stat-account').textContent=acc||'—';
+  document.getElementById('stat-rows').textContent=rows.length.toLocaleString();
+  document.getElementById('stat-fnns').textContent=fnns.toLocaleString();
+  document.getElementById('stat-periods').textContent=dates.length;
+  document.getElementById('generate-btn').disabled=false;
+
+  // Populate Enterprise Fund preview card
+  const ft = computeFundInputs(rows, latD);
+  const fmt = v => '$' + v.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('fund-g12').textContent = fmt(ft.g12);
+  document.getElementById('fund-g25').textContent = fmt(ft.g25);
+  document.getElementById('fund-g22').textContent = fmt(ft.g22);
+  document.getElementById('fund-g28').textContent = fmt(ft.g28);
+  document.getElementById('fund-preview').style.display = '';
+
+  loadedData={rows,dates,latD,billNo,acc,catTotals};
+}
+
+async function generateReport(){
+  if(!loadedData) return;
+  const {rows,dates,latD,billNo,acc,catTotals}=loadedData;
+  XB.initStyles();
+
+  const latRows=rows.filter(x=>x['BILL DATE']===latD);
+  const grandLatest=latRows.reduce((s,x)=>s+(x['AMOUNT $']||0),0);
+  const grandAll=rows.reduce((s,x)=>s+(x['AMOUNT $']||0),0);
+
+  const sh1=XB.newSheet(); sh1.name='Executive Summary';
+  buildSummary(sh1,rows,dates,latD,catTotals,grandLatest,grandAll,acc,billNo);
+
+  const sh2=XB.newSheet(); sh2.name='Service Inventory';
+  buildInventory(sh2,rows,latD);
+
+  const sh3=XB.newSheet(); sh3.name='Licence Details';
+  buildLicences(sh3,rows,dates,latD);
+
+  const sh4=XB.newSheet(); sh4.name='Mobile Services';
+  buildMobile(sh4,rows,latD);
+
+  const sh5=XB.newSheet(); sh5.name='Enterprise Fund Calculator';
+  const contractMo = 36;
+  buildFundsCalculator(sh5,rows,latD,acc,contractMo);
+
+  const sh6=XB.newSheet(); sh6.name='Fund Eligibility Breakdown';
+  buildFundBreakdown(sh6,rows,latD,acc);
+
+  const fname=`Telstra_Billing_Summary_${acc}.xlsx`;
+  await XB.save([sh1,sh2,sh3,sh4,sh5,sh6],fname);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EVENT WIRING
+// ═══════════════════════════════════════════════════════════════════════════════
+const dropZone=document.getElementById('drop-zone');
+const fileInput=document.getElementById('file-input');
+
+function handleFile(file){
+  if(!file) return;
+  const ext=file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+  if(!['.xlsm','.xlsx','.xls'].includes(ext)){alert('Please upload an .xlsm, .xlsx, or .xls file.');return;}
+  document.getElementById('file-name-label').textContent=file.name;
+  document.getElementById('file-pill-wrap').style.display='';
+  processFile(file);
+}
+
+fileInput.addEventListener('change',e=>{if(e.target.files[0])handleFile(e.target.files[0]);});
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('drag');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('drag');if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);});
+
+function resetAll(){
+  fileInput.value='';
+  document.getElementById('file-pill-wrap').style.display='none';
+  document.getElementById('config-panel').style.display='none';
+  document.getElementById('fund-preview').style.display='none';
+  document.getElementById('generate-btn').disabled=true;
+  loadedData=null;
+}
+document.getElementById('remove-file-btn').addEventListener('click',e=>{e.stopPropagation();e.preventDefault();resetAll();});
+document.getElementById('reset-btn').addEventListener('click',resetAll);
+document.getElementById('generate-btn').addEventListener('click',generateReport);
+</script>
+</body>
+</html>
